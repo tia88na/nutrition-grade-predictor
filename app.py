@@ -349,6 +349,10 @@ if df is not None:
     else:
         st.warning("No products found matching your filters. Please adjust your search criteria.")
 
+else:
+    st.error("❌ Failed to load the dataset. Please ensure 'nutrients_csvfile.csv' is present in the application directory.")
+    st.info("The dataset file should be semicolon-separated (;) and contain nutrition grade information.")
+
 # Footer
 st.divider()
 st.markdown("""
