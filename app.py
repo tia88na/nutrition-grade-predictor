@@ -1,6 +1,6 @@
 """
-Nutrition Grade Prediction System
-A Streamlit web application for predicting nutrition grades of food products
+NutriScan - Predicting Health Risk from Food Product Labels
+A Streamlit web application for analyzing nutrition grades and health scores of food products
 """
 
 import streamlit as st
@@ -10,27 +10,24 @@ import pandas as pd
 
 # Page configuration
 st.set_page_config(
-    page_title="Nutrition Grade Prediction",
+    page_title="NutriScan - Nutrition Analysis",
     page_icon="🍎",
     layout="wide"
 )
 
-# Title and description
-st.title("🍎 Nutrition Grade Prediction System")
-st.markdown("""
-This application predicts the **nutrition grade** (A, B, C, D, or E) of a food product 
-based on its nutritional values per 100g.
-
-- **Grade A**: Best nutritional quality
-- **Grade B**: Good nutritional quality  
-- **Grade C**: Average nutritional quality
-- **Grade D**: Poor nutritional quality
-- **Grade E**: Lowest nutritional quality
-
-Simply enter the nutritional values below and click **Predict** to get the nutrition grade.
-""")
-
-st.divider()
+# Load the dataset
+@st.cache_data
+def load_dataset():
+    """Load the food products dataset"""
+    try:
+        # Skip the first row which is a description, use second row as header
+        df = pd.read_csv('nutrients_csvfile.csv', sep=';', skiprows=1)
+        # Remove rows with missing nutrition grades
+        df = df.dropna(subset=['nutrition_grade_fr'])
+        return df
+    except Exception as e:
+        st.error(f"Error loading dataset: {e}")
+        return None
 
 # Load the model
 @st.cache_resource
@@ -43,203 +40,321 @@ def load_model():
         st.error(f"Error loading model: {e}")
         return None
 
-# Main content
-col1, col2 = st.columns([2, 1])
+# Title and description
+st.title("🍎 NutriScan - Nutrition Grade Analysis System")
+st.markdown("""
+This application analyzes **nutrition grades** (A, B, C, D, or E) and **health scores** of food products 
+from a dataset of 5,000 US food products.
 
-with col1:
-    st.subheader("📊 Enter Nutritional Values (per 100g)")
-    
-    # Create two columns for input fields
-    input_col1, input_col2 = st.columns(2)
-    
-    with input_col1:
-        energy = st.number_input(
-            "Energy (kcal/100g)",
-            min_value=0.0,
-            max_value=5000.0,
-            value=250.0,
-            step=10.0,
-            help="Energy content in kilocalories per 100g"
-        )
-        
-        fat = st.number_input(
-            "Fat (g/100g)",
-            min_value=0.0,
-            max_value=100.0,
-            value=5.0,
-            step=0.1,
-            help="Total fat content in grams per 100g"
-        )
-        
-        saturated_fat = st.number_input(
-            "Saturated Fat (g/100g)",
-            min_value=0.0,
-            max_value=100.0,
-            value=2.0,
-            step=0.1,
-            help="Saturated fat content in grams per 100g"
-        )
-        
-        sugars = st.number_input(
-            "Sugars (g/100g)",
-            min_value=0.0,
-            max_value=100.0,
-            value=10.0,
-            step=0.1,
-            help="Sugar content in grams per 100g"
-        )
-    
-    with input_col2:
-        salt = st.number_input(
-            "Salt (g/100g)",
-            min_value=0.0,
-            max_value=100.0,
-            value=0.5,
-            step=0.01,
-            help="Salt content in grams per 100g"
-        )
-        
-        protein = st.number_input(
-            "Protein (g/100g)",
-            min_value=0.0,
-            max_value=100.0,
-            value=8.0,
-            step=0.1,
-            help="Protein content in grams per 100g"
-        )
-        
-        fiber = st.number_input(
-            "Fiber (g/100g)",
-            min_value=0.0,
-            max_value=100.0,
-            value=3.0,
-            step=0.1,
-            help="Fiber content in grams per 100g"
-        )
-        
-        carbohydrates = st.number_input(
-            "Carbohydrates (g/100g)",
-            min_value=0.0,
-            max_value=100.0,
-            value=15.0,
-            step=0.1,
-            help="Carbohydrate content in grams per 100g"
-        )
+- **Grade A**: Best nutritional quality (Very Healthy - Score 5)
+- **Grade B**: Good nutritional quality (Healthy - Score 4)
+- **Grade C**: Average nutritional quality (Moderate - Score 3)
+- **Grade D**: Poor nutritional quality (Unhealthy - Score 2)
+- **Grade E**: Lowest nutritional quality (Very Risky - Score 1)
 
-with col2:
-    st.subheader("📋 Input Summary")
-    
-    # Display input summary in a nice format
-    summary_data = {
-        "Nutrient": ["Energy", "Fat", "Saturated Fat", "Sugars", "Salt", "Protein", "Fiber", "Carbohydrates"],
-        "Value": [
-            f"{energy} kcal",
-            f"{fat} g",
-            f"{saturated_fat} g",
-            f"{sugars} g",
-            f"{salt} g",
-            f"{protein} g",
-            f"{fiber} g",
-            f"{carbohydrates} g"
-        ]
-    }
-    
-    summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df, hide_index=True, use_container_width=True)
+Select a product from the dataset to view its nutritional information and health score.
+""")
 
 st.divider()
 
-# Predict button
-if st.button("🔮 Predict Nutrition Grade", type="primary", use_container_width=True):
-    # Load model
-    model = load_model()
+# Load data
+df = load_dataset()
+
+if df is not None:
+    # Product selection section
+    st.subheader("🔍 Select a Food Product")
     
-    if model is not None:
-        # Prepare input data
-        # Order: energy, fat, saturated_fat, sugars, salt, protein, fiber, carbohydrates
-        input_features = np.array([[energy, fat, saturated_fat, sugars, salt, protein, fiber, carbohydrates]])
+    # Filter options
+    filter_col1, filter_col2 = st.columns(2)
+    
+    with filter_col1:
+        # Grade filter
+        grade_filter = st.multiselect(
+            "Filter by Nutrition Grade",
+            options=['a', 'b', 'c', 'd', 'e'],
+            default=[],
+            format_func=lambda x: f"Grade {x.upper()}"
+        )
+    
+    with filter_col2:
+        # Search by product name
+        search_term = st.text_input("Search Product Name", "")
+    
+    # Apply filters
+    filtered_df = df.copy()
+    if grade_filter:
+        filtered_df = filtered_df[filtered_df['nutrition_grade_fr'].isin(grade_filter)]
+    if search_term:
+        filtered_df = filtered_df[filtered_df['product_name'].str.contains(search_term, case=False, na=False)]
+    
+    # Product selection
+    if len(filtered_df) > 0:
+        # Create a display name with nutrition grade
+        filtered_df['display_name'] = filtered_df.apply(
+            lambda row: f"{row['product_name']} (Grade: {str(row['nutrition_grade_fr']).upper()})", 
+            axis=1
+        )
         
-        try:
-            # Make prediction
-            prediction_numeric = model.predict(input_features)[0]
+        selected_product_display = st.selectbox(
+            f"Choose from {len(filtered_df)} products:",
+            options=filtered_df['display_name'].tolist(),
+            index=0
+        )
+        
+        # Get the selected product data
+        selected_idx = filtered_df[filtered_df['display_name'] == selected_product_display].index[0]
+        product = df.loc[selected_idx]
+        
+        st.divider()
+        
+        # Display product information
+        st.subheader(f"📦 {product['product_name']}")
+        
+        # Product details in columns
+        detail_col1, detail_col2 = st.columns(2)
+        
+        with detail_col1:
+            st.markdown("### Product Information")
+            if pd.notna(product['categories']):
+                st.write(f"**Category:** {product['categories']}")
+            else:
+                st.write("**Category:** Not specified")
+            st.write(f"**Country:** {product['countries']}")
             
-            # Convert numeric prediction to letter grade
-            # Model outputs: 0=a, 1=b, 2=c, 3=d, 4=e
-            grade_mapping = {0: 'a', 1: 'b', 2: 'c', 3: 'd', 4: 'e'}
-            prediction = grade_mapping.get(prediction_numeric, str(prediction_numeric).lower())
+            if pd.notna(product['ingredients_text']):
+                with st.expander("📝 View Ingredients"):
+                    st.write(product['ingredients_text'])
             
-            # Display result
-            st.success("✅ Prediction Complete!")
+            if pd.notna(product['additives_tags']):
+                with st.expander("🧪 View Additives"):
+                    additives = product['additives_tags'].split(',') if isinstance(product['additives_tags'], str) else []
+                    for additive in additives:
+                        st.write(f"- {additive}")
+        
+        with detail_col2:
+            st.markdown("### Nutritional Values (per 100g)")
             
-            # Create a large, centered display for the grade
-            result_col1, result_col2, result_col3 = st.columns([1, 2, 1])
+            # Create nutritional table
+            nutrition_data = {
+                'Nutrient': [
+                    'Energy',
+                    'Fat',
+                    'Saturated Fat',
+                    'Sugars',
+                    'Salt',
+                    'Proteins',
+                    'Fiber',
+                    'Carbohydrates'
+                ],
+                'Value': [
+                    f"{product['energy_100g']:.2f} kcal" if pd.notna(product['energy_100g']) else "N/A",
+                    f"{product['fat_100g']:.2f} g" if pd.notna(product['fat_100g']) else "N/A",
+                    f"{product['saturated-fat_100g']:.2f} g" if pd.notna(product['saturated-fat_100g']) else "N/A",
+                    f"{product['sugars_100g']:.2f} g" if pd.notna(product['sugars_100g']) else "N/A",
+                    f"{product['salt_100g']:.2f} g" if pd.notna(product['salt_100g']) else "N/A",
+                    f"{product['proteins_100g']:.2f} g" if pd.notna(product['proteins_100g']) else "N/A",
+                    f"{product['fiber_100g']:.2f} g" if pd.notna(product['fiber_100g']) else "N/A",
+                    f"{product['carbohydrates_100g']:.2f} g" if pd.notna(product['carbohydrates_100g']) else "N/A",
+                ]
+            }
             
-            with result_col2:
-                # Color coding for grades
-                grade_colors = {
-                    'a': '#038141',  # Dark green
-                    'b': '#85BB2F',  # Light green
-                    'c': '#FECB02',  # Yellow
-                    'd': '#EE8100',  # Orange
-                    'e': '#E63E11'   # Red
-                }
-                
-                # Normalize grade to lowercase for comparison
-                grade_lower = prediction.lower() if isinstance(prediction, str) else str(prediction).lower()
-                color = grade_colors.get(grade_lower, '#888888')
+            nutrition_df = pd.DataFrame(nutrition_data)
+            st.dataframe(nutrition_df, hide_index=True, use_container_width=True)
+        
+        st.divider()
+        
+        # Display nutrition grade and health score
+        st.subheader("📊 Nutrition Analysis")
+        
+        result_col1, result_col2, result_col3 = st.columns([1, 1, 1])
+        
+        with result_col1:
+            st.markdown("#### Nutrition Grade")
+            
+            # Get the actual grade from dataset
+            actual_grade = str(product['nutrition_grade_fr']).lower()
+            
+            # Color coding for grades
+            grade_colors = {
+                'a': '#038141',  # Dark green
+                'b': '#85BB2F',  # Light green
+                'c': '#FECB02',  # Yellow
+                'd': '#EE8100',  # Orange
+                'e': '#E63E11'   # Red
+            }
+            
+            color = grade_colors.get(actual_grade, '#888888')
+            
+            st.markdown(f"""
+            <div style="
+                background-color: {color};
+                padding: 30px;
+                border-radius: 15px;
+                text-align: center;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            ">
+                <h1 style="color: white; font-size: 60px; margin: 0; font-weight: bold;">
+                    {actual_grade.upper()}
+                </h1>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with result_col2:
+            st.markdown("#### Health Risk Score")
+            
+            # Map grade to health score (1=Very Risky, 5=Very Healthy)
+            health_score_mapping = {
+                'a': 5,
+                'b': 4,
+                'c': 3,
+                'd': 2,
+                'e': 1
+            }
+            
+            health_score = health_score_mapping.get(actual_grade, 3)
+            
+            # Color for health score
+            score_colors = {
+                5: '#038141',
+                4: '#85BB2F',
+                3: '#FECB02',
+                2: '#EE8100',
+                1: '#E63E11'
+            }
+            
+            score_color = score_colors.get(health_score, '#888888')
+            
+            st.markdown(f"""
+            <div style="
+                background-color: {score_color};
+                padding: 30px;
+                border-radius: 15px;
+                text-align: center;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            ">
+                <h1 style="color: white; font-size: 60px; margin: 0; font-weight: bold;">
+                    {health_score}/5
+                </h1>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with result_col3:
+            st.markdown("#### Nutrition Score")
+            
+            # Display the nutrition score from dataset
+            nutrition_score = product['nutrition-score-fr_100g']
+            
+            if pd.notna(nutrition_score):
+                # Determine color based on score (lower is better)
+                if nutrition_score < 0:
+                    score_display_color = '#038141'
+                elif nutrition_score < 3:
+                    score_display_color = '#85BB2F'
+                elif nutrition_score < 11:
+                    score_display_color = '#FECB02'
+                elif nutrition_score < 19:
+                    score_display_color = '#EE8100'
+                else:
+                    score_display_color = '#E63E11'
                 
                 st.markdown(f"""
                 <div style="
-                    background-color: {color};
-                    padding: 40px;
+                    background-color: {score_display_color};
+                    padding: 30px;
                     border-radius: 15px;
                     text-align: center;
                     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
                 ">
-                    <h1 style="color: white; font-size: 80px; margin: 0; font-weight: bold;">
-                        {prediction.upper()}
+                    <h1 style="color: white; font-size: 60px; margin: 0; font-weight: bold;">
+                        {nutrition_score:.0f}
                     </h1>
-                    <p style="color: white; font-size: 24px; margin: 10px 0 0 0;">
-                        Nutrition Grade
-                    </p>
                 </div>
                 """, unsafe_allow_html=True)
+            else:
+                st.info("Score not available")
+        
+        # Explanation section
+        st.divider()
+        st.subheader("📖 Health Risk Assessment")
+        
+        health_explanations = {
+            'a': "**Very Healthy (Score 5)** - This product has excellent nutritional quality. It's low in unhealthy nutrients (saturated fats, sugars, salt) and high in beneficial ones (fiber, protein). Recommended for regular consumption.",
+            'b': "**Healthy (Score 4)** - This product has good nutritional quality. It's a healthy choice for most people with a balanced nutrient profile. Safe for regular consumption.",
+            'c': "**Moderate (Score 3)** - This product has average nutritional quality. Consider consuming in moderation as part of a balanced diet. Not harmful but not optimal for health.",
+            'd': "**Unhealthy (Score 2)** - This product has poor nutritional quality. It may be high in unhealthy nutrients. Consider healthier alternatives when possible and limit consumption.",
+            'e': "**Very Risky (Score 1)** - This product has the lowest nutritional quality. It's likely high in saturated fats, sugars, or salt. Limit consumption and opt for healthier choices."
+        }
+        
+        explanation = health_explanations.get(actual_grade, "Health assessment not available.")
+        st.info(explanation)
+        
+        # Additional nutritional insights
+        with st.expander("💡 Nutritional Insights"):
+            st.markdown("#### Key Nutritional Indicators")
             
-            # Add explanation
-            st.markdown("---")
-            st.subheader("📖 What does this grade mean?")
+            insights = []
             
-            grade_explanations = {
-                'a': "**Excellent!** This product has the best nutritional quality. It's low in unhealthy nutrients and high in beneficial ones.",
-                'b': "**Good!** This product has good nutritional quality. It's a healthy choice for most people.",
-                'c': "**Average.** This product has moderate nutritional quality. Consider consuming in moderation.",
-                'd': "**Poor.** This product has poor nutritional quality. Consider healthier alternatives when possible.",
-                'e': "**Very Poor.** This product has the lowest nutritional quality. Limit consumption and opt for healthier choices."
-            }
+            # Energy analysis
+            if pd.notna(product['energy_100g']):
+                energy = product['energy_100g']
+                if energy < 200:
+                    insights.append("✅ Low in energy - suitable for weight management")
+                elif energy > 500:
+                    insights.append("⚠️ High in energy - consume in small portions")
             
-            explanation = grade_explanations.get(grade_lower, "Grade information not available.")
-            st.info(explanation)
+            # Fat analysis
+            if pd.notna(product['fat_100g']):
+                fat = product['fat_100g']
+                if fat < 3:
+                    insights.append("✅ Low-fat product")
+                elif fat > 20:
+                    insights.append("⚠️ High in fat content")
             
-            # Display feature values used for prediction
-            with st.expander("🔍 View Input Details"):
-                st.write("The prediction was based on the following nutritional values:")
-                feature_df = pd.DataFrame({
-                    'Feature': ['Energy (kcal/100g)', 'Fat (g/100g)', 'Saturated Fat (g/100g)', 
-                               'Sugars (g/100g)', 'Salt (g/100g)', 'Protein (g/100g)', 
-                               'Fiber (g/100g)', 'Carbohydrates (g/100g)'],
-                    'Value': [energy, fat, saturated_fat, sugars, salt, protein, fiber, carbohydrates]
-                })
-                st.table(feature_df)
-                
-        except Exception as e:
-            st.error(f"Error making prediction: {e}")
-            st.write("Please check your input values and try again.")
+            # Sugar analysis
+            if pd.notna(product['sugars_100g']):
+                sugar = product['sugars_100g']
+                if sugar < 5:
+                    insights.append("✅ Low in sugar")
+                elif sugar > 22.5:
+                    insights.append("⚠️ High in sugar - limit consumption")
+            
+            # Salt analysis
+            if pd.notna(product['salt_100g']):
+                salt = product['salt_100g']
+                if salt < 0.3:
+                    insights.append("✅ Low in salt")
+                elif salt > 1.5:
+                    insights.append("⚠️ High in salt - may affect blood pressure")
+            
+            # Fiber analysis
+            if pd.notna(product['fiber_100g']):
+                fiber = product['fiber_100g']
+                if fiber > 6:
+                    insights.append("✅ High in fiber - good for digestion")
+                elif fiber < 3:
+                    insights.append("ℹ️ Low in fiber")
+            
+            # Protein analysis
+            if pd.notna(product['proteins_100g']):
+                protein = product['proteins_100g']
+                if protein > 10:
+                    insights.append("✅ Good source of protein")
+            
+            if insights:
+                for insight in insights:
+                    st.write(insight)
+            else:
+                st.write("No specific insights available for this product.")
+    
+    else:
+        st.warning("No products found matching your filters. Please adjust your search criteria.")
 
 # Footer
 st.divider()
 st.markdown("""
 <div style="text-align: center; color: #666; padding: 20px;">
-    <p>Built with ❤️ using Streamlit | Random Forest Classifier Model</p>
-    <p style="font-size: 12px;">Note: This is a prediction tool and should not replace professional nutritional advice.</p>
+    <p><strong>NutriScan Project</strong> - COE305 Machine Learning Course</p>
+    <p>Predicting Health Risk from Food Product Labels | Dataset: 5,000 US Food Products</p>
+    <p style="font-size: 12px;">Note: This is an educational project and should not replace professional nutritional advice.</p>
 </div>
 """, unsafe_allow_html=True)
